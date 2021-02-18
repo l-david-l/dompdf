@@ -1,7 +1,7 @@
 {
-    "name": "dompdf/dompdf",
+    "name": "l-david-l/dompdf-no-alpha-png",
     "type": "library",
-    "description": "DOMPDF is a CSS 2.1 compliant HTML to PDF converter",
+    "description": "A fork of dompdf/dompdf with no PNG alpha processing. DOMPDF is a CSS 2.1 compliant HTML to PDF converter",
     "homepage": "https://github.com/dompdf/dompdf",
     "license": "LGPL-2.1",
     "authors": [
