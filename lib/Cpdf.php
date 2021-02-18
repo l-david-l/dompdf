@@ -5803,10 +5803,10 @@ EOT;
             // 6 => fullcolor with alpha
             $is_alpha = in_array($color_type, [4, 6]) || ($color_type == 3 && $bit_depth != 4);
 
-            if ($is_alpha) { // exclude grayscale alpha
-                $this->addImagePngAlpha($file, $x, $y, $w, $h, $color_type);
-                return;
-            }
+            //if ($is_alpha) { // exclude grayscale alpha
+            //    $this->addImagePngAlpha($file, $x, $y, $w, $h, $color_type);
+            //    return;
+            //}
 
             //png files typically contain an alpha channel.
             //pdf file format or class.pdf does not support alpha blending.
