@@ -14,7 +14,7 @@ class OptionsTest extends TestCase
         $this->assertEquals($root . '/lib/fonts', $option->getFontDir());
         $this->assertEquals($root . '/lib/fonts', $option->getFontCache());
         $this->assertEquals([$root], $option->getChroot());
-        $this->assertEquals(sys_get_temp_dir() . "/log.htm", $option->getLogOutputFile());
+        $this->assertEmpty($option->getLogOutputFile());
         $this->assertEquals('screen', $option->getDefaultMediaType());
         $this->assertEquals('letter', $option->getDefaultPaperSize());
         $this->assertEquals('serif', $option->getDefaultFont());
@@ -23,7 +23,6 @@ class OptionsTest extends TestCase
         $this->assertFalse($option->getIsPhpEnabled());
         $this->assertFalse($option->getIsRemoteEnabled());
         $this->assertTrue($option->getIsJavascriptEnabled());
-        $this->assertFalse($option->getIsHtml5ParserEnabled());
         $this->assertTrue($option->getIsFontSubsettingEnabled());
         $this->assertFalse($option->getDebugPng());
         $this->assertFalse($option->getDebugKeepTemp());
@@ -33,6 +32,7 @@ class OptionsTest extends TestCase
         $this->assertTrue($option->getDebugLayoutBlocks());
         $this->assertTrue($option->getDebugLayoutInline());
         $this->assertTrue($option->getDebugLayoutPaddingBox());
+        $this->assertNull($option->getAllowedRemoteHosts());
 
         $option = new Options(['tempDir' => 'test1']);
         $this->assertEquals('test1', $option->getTempDir());
@@ -54,6 +54,7 @@ class OptionsTest extends TestCase
             'fontHeightRatio' => 1.2,
             'isPhpEnabled' => true,
             'isRemoteEnabled' => true,
+            'allowedRemoteHosts' => ['w3.org'],
             'isJavascriptEnabled' => false,
             'isHtml5ParserEnabled' => true,
             'isFontSubsettingEnabled' => false,
@@ -64,7 +65,8 @@ class OptionsTest extends TestCase
             'debugLayoutLines' => false,
             'debugLayoutBlocks' => false,
             'debugLayoutInline' => false,
-            'debugLayoutPaddingBox' => false
+            'debugLayoutPaddingBox' => false,
+            'httpContext' => ['ssl' => ['verify_peer' => false]],
         ]);
         $this->assertEquals('test1', $option->getTempDir());
         $this->assertEquals('test2', $option->getFontDir());
@@ -79,7 +81,6 @@ class OptionsTest extends TestCase
         $this->assertTrue($option->getIsPhpEnabled());
         $this->assertTrue($option->getIsRemoteEnabled());
         $this->assertFalse($option->getIsJavascriptEnabled());
-        $this->assertTrue($option->getIsHtml5ParserEnabled());
         $this->assertFalse($option->getIsFontSubsettingEnabled());
         $this->assertTrue($option->getDebugPng());
         $this->assertTrue($option->getDebugKeepTemp());
@@ -89,8 +90,76 @@ class OptionsTest extends TestCase
         $this->assertFalse($option->getDebugLayoutBlocks());
         $this->assertFalse($option->getDebugLayoutInline());
         $this->assertFalse($option->getDebugLayoutPaddingBox());
+        $this->assertIsResource($option->getHttpContext());
+        $this->assertIsArray($option->getAllowedRemoteHosts());
 
         $option->setChroot(['test11']);
         $this->assertEquals(['test11'], $option->getChroot());
+    }
+
+    public function testAllowedProtocols()
+    {
+        $options = new Options(["isRemoteEnabled" => false]);
+        $options->setAllowedProtocols(["http://"]);
+        $allowedProtocols = $options->getAllowedProtocols();
+        $this->assertIsArray($allowedProtocols);
+        $this->assertEquals(1, count($allowedProtocols));
+        $this->assertArrayHasKey("http://", $allowedProtocols);
+        $this->assertIsArray($allowedProtocols["http://"]);
+        $this->assertArrayHasKey("rules", $allowedProtocols["http://"]);
+        $this->assertIsArray($allowedProtocols["http://"]["rules"]);
+        $this->assertEquals(1, count($allowedProtocols["http://"]["rules"]));
+        $this->assertEquals([$options, "validateRemoteUri"], $allowedProtocols["http://"]["rules"][0]);
+
+        [$validation_result] = $allowedProtocols["http://"]["rules"][0]("http://example.com/");
+        $this->assertFalse($validation_result);
+
+        
+        $mock_protocol = [
+            "mock://" => [
+                "rules" => [
+                    function ($uri) { return [true, null]; }
+                ]
+            ]
+        ];
+        $options->setAllowedProtocols($mock_protocol);
+        $allowedProtocols = $options->getAllowedProtocols();
+        $this->assertIsArray($allowedProtocols);
+        $this->assertEquals(1, count($allowedProtocols));
+        $this->assertArrayHasKey("mock://", $allowedProtocols);
+        $this->assertIsArray($allowedProtocols["mock://"]);
+        $this->assertArrayHasKey("rules", $allowedProtocols["mock://"]);
+        $this->assertIsArray($allowedProtocols["mock://"]["rules"]);
+        $this->assertEquals(1, count($allowedProtocols["mock://"]["rules"]));
+        $this->assertEquals($mock_protocol["mock://"]["rules"][0], $allowedProtocols["mock://"]["rules"][0]);
+
+        [$validation_result] = $allowedProtocols["mock://"]["rules"][0]("mock://example.com/");
+        $this->assertTrue($validation_result);
+    }
+
+    public function testAllowedRemoteHosts()
+    {
+        $options = new Options(['isRemoteEnabled' => true]);
+        $options->setAllowedRemoteHosts(['en.wikipedia.org']);
+        $options->setAllowedProtocols(["http://"]);
+        $allowedRemoteHosts = $options->getAllowedRemoteHosts();
+        $this->assertIsArray($allowedRemoteHosts);
+        $this->assertEquals(1, count($allowedRemoteHosts));
+        $this->assertContains("en.wikipedia.org", $allowedRemoteHosts);
+
+        $allowedProtocols = $options->getAllowedProtocols();
+        $this->assertIsArray($allowedProtocols);
+        $this->assertEquals(1, count($allowedProtocols));
+        $this->assertArrayHasKey("http://", $allowedProtocols);
+        $this->assertIsArray($allowedProtocols["http://"]);
+        $this->assertArrayHasKey("rules", $allowedProtocols["http://"]);
+        $this->assertIsArray($allowedProtocols["http://"]["rules"]);
+        $this->assertEquals(1, count($allowedProtocols["http://"]["rules"]));
+        $this->assertEquals([$options, "validateRemoteUri"], $allowedProtocols["http://"]["rules"][0]);
+
+        [$validation_result] = $allowedProtocols["http://"]["rules"][0]("http://example.com/");
+        $this->assertFalse($validation_result);
+        [$validation_result] = $allowedProtocols["http://"]["rules"][0]("http://en.wikipedia.org/");
+        $this->assertTrue($validation_result);
     }
 }
